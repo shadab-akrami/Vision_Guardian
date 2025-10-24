@@ -1,0 +1,36 @@
+# Development Requirements (for testing on non-Raspberry Pi systems)
+# This is a minimal set for development/testing without ARM-specific packages
+
+# Computer Vision
+opencv-python>=4.8.0
+numpy>=1.24.0,<2.0.0
+imutils>=0.5.4
+Pillow>=10.0.0
+
+# OCR
+pytesseract>=0.3.10
+
+# Configuration
+PyYAML>=6.0.0
+python-dotenv>=1.0.0
+
+# Utilities
+requests>=2.31.0
+psutil>=5.9.0
+
+# Logging
+coloredlogs>=15.0.0
+python-json-logger>=2.0.0
+
+# Color Detection
+webcolors>=1.13
+
+# System Monitoring
+distro>=1.8.0
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+
+# Note: Heavy packages like face-recognition, dlib, TFLite are excluded
+# Install them separately if needed for full testing
