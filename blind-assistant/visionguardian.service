@@ -1,0 +1,29 @@
+[Unit]
+Description=VisionGuardian - Smart Assistant for Visually Impaired Users
+After=network.target sound.target multi-user.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/blind-assistant
+Environment="PATH=/home/pi/blind-assistant/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ExecStart=/home/pi/blind-assistant/venv/bin/python3 /home/pi/blind-assistant/src/main.py
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=60
+TimeoutStopSec=30
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=2G
+
+[Install]
+WantedBy=multi-user.target

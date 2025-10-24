@@ -1,0 +1,170 @@
+# VisionGuardian Configuration File
+# Optimized for Raspberry Pi 5 (64-bit ARM64)
+
+# System Settings
+system:
+  debug_mode: false
+  log_level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  log_max_size_mb: 100  # Maximum log size before rotation
+  cache_auto_clean: true
+  cache_max_age_hours: 24
+  auto_start: true
+  storage_warning_threshold_gb: 5  # Warn when less than 5GB free
+
+# Camera Settings
+camera:
+  device_id: 0  # Default webcam
+  resolution_width: 640  # Lower resolution for better performance
+  resolution_height: 480
+  fps: 15  # Target FPS for Raspberry Pi 5
+  rotation: 0  # 0, 90, 180, 270
+  flip_horizontal: false
+  flip_vertical: false
+  auto_focus: true
+  brightness: 50  # 0-100
+  contrast: 50    # 0-100
+
+# Audio Settings
+audio:
+  engine: "pyttsx3"  # pyttsx3 or gtts
+  voice_speed: 160  # Words per minute
+  volume: 0.9  # 0.0 to 1.0
+  language: "en"  # Language code
+  output_device: "default"  # Audio output device
+  enable_audio_cues: true
+  priority_interrupt: true  # Higher priority announcements interrupt lower ones
+
+# Voice Assistant Settings
+voice_assistant:
+  enabled: true
+  wake_word: "hey guardian"  # Wake word for voice activation
+  timeout_seconds: 5  # Listening timeout
+  ambient_noise_duration: 1  # Calibration time for ambient noise
+  energy_threshold: 4000  # Adjust based on environment
+
+# Facial Recognition Settings
+facial_recognition:
+  enabled: true
+  model: "hog"  # hog (faster on CPU) or cnn (more accurate but slower)
+  tolerance: 0.6  # Lower = stricter matching (0.0-1.0)
+  recognition_interval_seconds: 2  # Minimum time between recognitions
+  max_faces_in_frame: 5
+  announce_unknown: false
+  save_unknown_faces: false
+  encoding_model: "small"  # small or large
+
+# Object Detection Settings
+object_detection:
+  enabled: true
+  model_type: "tflite"  # tflite or onnx
+  model_path: "models/ssd_mobilenet_v2_coco_quant.tflite"
+  labels_path: "models/coco_labels.txt"
+  confidence_threshold: 0.5  # 0.0-1.0
+  detection_interval_seconds: 1
+  max_objects_announce: 3  # Only announce top 3 objects
+  filter_classes: []  # List of class IDs to filter, empty = all
+  nms_threshold: 0.5  # Non-maximum suppression threshold
+
+# OCR Settings
+ocr:
+  enabled: true
+  engine: "tesseract"  # tesseract or easyocr
+  languages: ["eng"]  # Language codes
+  confidence_threshold: 60  # 0-100
+  preprocessing: true  # Apply image preprocessing
+  detect_orientation: true
+  announcement_mode: "sentences"  # sentences, words, or full
+
+# Scene Description Settings
+scene_description:
+  enabled: true
+  model_path: "models/scene_classifier_quantized.tflite"
+  description_interval_seconds: 5
+  detail_level: "medium"  # low, medium, high
+  include_lighting: true
+  include_location_type: true
+
+# Obstacle Detection Settings
+obstacle_detection:
+  enabled: true
+  min_distance_cm: 150  # Alert when obstacle within 150cm
+  warning_distance_cm: 100  # Critical warning distance
+  detection_zones: 3  # Left, Center, Right
+  alert_interval_seconds: 2
+  use_depth_estimation: true
+  depth_model_path: "models/midas_v21_small_256_quantized.tflite"
+
+# Currency Detection Settings
+currency_detection:
+  enabled: true
+  supported_currencies: ["USD", "EUR", "GBP"]  # Add more as needed
+  model_path: "models/currency_classifier_quantized.tflite"
+  confidence_threshold: 0.7
+  announcement_format: "detailed"  # simple or detailed
+
+# Color Detection Settings
+color_detection:
+  enabled: true
+  mode: "dominant"  # dominant, precise, or palette
+  color_space: "rgb"  # rgb or hsv
+  num_colors: 3  # Number of dominant colors to detect
+  announce_shade: true  # e.g., "light blue" vs "blue"
+
+# Feature Priority (1=highest, 10=lowest)
+priorities:
+  emergency_detection: 1
+  obstacle_detection: 2
+  facial_recognition: 3
+  currency_detection: 4
+  object_detection: 5
+  color_detection: 6
+  ocr: 7
+  scene_description: 8
+
+# Emergency Detection Settings
+emergency_detection:
+  enabled: true
+  detect_fire: true
+  detect_medical_symbols: true
+  detect_warning_signs: true
+  alert_repeat_interval_seconds: 10
+  emergency_contact: null  # Phone number for alerts (future feature)
+
+# Navigation Assistance Settings
+navigation:
+  enabled: false  # Future feature - requires GPS/compass
+  cardinal_directions: true
+  announce_turns: true
+  waypoint_alerts: true
+
+# Performance Settings
+performance:
+  enable_threading: true
+  max_threads: 4
+  gpu_acceleration: false  # Set to true if GPU available
+  model_quantization: "int8"  # int8, fp16, or none
+  frame_skip: 2  # Process every Nth frame
+  enable_profiling: false
+
+# Storage Management
+storage:
+  auto_cleanup: true
+  keep_logs_days: 7
+  keep_cache_hours: 24
+  backup_known_faces: true
+  models_compression: true
+
+# UI/UX Settings
+user_experience:
+  verbosity: "medium"  # low, medium, high
+  announcement_queue_size: 5
+  rapid_update_mode: false
+  haptic_feedback: false  # Future feature - requires hardware
+  led_indicators: true  # Use GPIO LEDs for status
+
+# Advanced Settings
+advanced:
+  enable_model_warmup: true  # Load models at startup
+  watchdog_enabled: true  # Auto-restart on crash
+  telemetry: false  # Anonymous usage statistics
+  experimental_features: false
