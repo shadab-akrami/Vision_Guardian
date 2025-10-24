@@ -57,8 +57,8 @@ facial_recognition:
 object_detection:
   enabled: true
   model_type: "tflite"  # tflite or onnx
-  model_path: "models/ssd_mobilenet_v2_coco_quant.tflite"
-  labels_path: "models/coco_labels.txt"
+  model_path: "ssd_mobilenet_v2_coco_quant.tflite"
+  labels_path: "coco_labels.txt"
   confidence_threshold: 0.5  # 0.0-1.0
   detection_interval_seconds: 1
   max_objects_announce: 3  # Only announce top 3 objects
@@ -78,7 +78,7 @@ ocr:
 # Scene Description Settings
 scene_description:
   enabled: true
-  model_path: "models/scene_classifier_quantized.tflite"
+  model_path: "scene_classifier_quantized.tflite"
   description_interval_seconds: 5
   detail_level: "medium"  # low, medium, high
   include_lighting: true
@@ -92,13 +92,13 @@ obstacle_detection:
   detection_zones: 3  # Left, Center, Right
   alert_interval_seconds: 2
   use_depth_estimation: true
-  depth_model_path: "models/midas_v21_small_256_quantized.tflite"
+  depth_model_path: "midas_v21_small_256_quantized.tflite"
 
 # Currency Detection Settings
 currency_detection:
   enabled: true
   supported_currencies: ["USD", "EUR", "GBP"]  # Add more as needed
-  model_path: "models/currency_classifier_quantized.tflite"
+  model_path: "currency_classifier_quantized.tflite"
   confidence_threshold: 0.7
   announcement_format: "detailed"  # simple or detailed
 

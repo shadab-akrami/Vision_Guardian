@@ -71,6 +71,7 @@ class VoiceAssistant:
             True if successful
         """
         if not self.enabled or not SR_AVAILABLE:
+            self.logger.warning("Voice assistant disabled or SpeechRecognition not available")
             return False
 
         try:
@@ -81,7 +82,14 @@ class VoiceAssistant:
             self.recognizer.energy_threshold = self.energy_threshold
 
             # Initialize microphone
-            self.microphone = sr.Microphone()
+            try:
+                self.microphone = sr.Microphone()
+            except Exception as mic_error:
+                self.logger.error(f"No microphone found: {mic_error}")
+                self.logger.info("Voice commands will not be available")
+                self.microphone = None
+                self.enabled = False
+                return False
 
             # Adjust for ambient noise
             with self.microphone as source:
@@ -93,11 +101,19 @@ class VoiceAssistant:
 
         except Exception as e:
             self.logger.error(f"Error initializing voice assistant: {e}")
+            self.logger.info("Voice commands will not be available. System will continue without voice control.")
+            self.microphone = None
+            self.enabled = False
             return False
 
     def start_listening(self):
         """Start listening for voice commands in background"""
         if not self.enabled or self.is_listening:
+            return
+
+        # Check if microphone is available
+        if self.microphone is None:
+            self.logger.warning("Cannot start listening: microphone not available")
             return
 
         self.is_listening = True
@@ -147,6 +163,11 @@ class VoiceAssistant:
         Returns:
             Recognized text or None
         """
+        # Check if microphone is available
+        if self.microphone is None:
+            self.logger.debug("Microphone not available")
+            return None
+
         try:
             with self.microphone as source:
                 # Listen

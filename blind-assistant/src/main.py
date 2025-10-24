@@ -44,11 +44,13 @@ class VisionGuardian:
         self.logger.info("VisionGuardian Starting...")
         self.logger.info("=" * 60)
 
+        # Initialize storage manager first (needed by system check)
+        self.storage_manager = StorageManager(self.config)
+
         # System check
         self._check_system()
 
-        # Initialize components
-        self.storage_manager = StorageManager(self.config)
+        # Initialize other components
         self.camera = None
         self.audio = None
         self.face_recognition = None
