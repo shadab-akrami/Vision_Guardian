@@ -21,8 +21,18 @@ camera:
   flip_horizontal: false
   flip_vertical: false
   auto_focus: true
-  brightness: 50  # 0-100
-  contrast: 50    # 0-100
+  brightness: 55  # 0-100 (slightly brighter for better detection)
+  contrast: 60    # 0-100 (higher contrast for clarity)
+  saturation: 55  # 0-100 (balanced color)
+  auto_white_balance: true  # Auto white balance for natural colors
+  auto_exposure: true  # Auto exposure for varying lighting
+  # Color correction (software adjustments, -50 to +50)
+  color_correction:
+    enabled: true
+    brightness_adjust: 0
+    contrast_adjust: 5    # Slight contrast boost
+    saturation_adjust: 0
+    gamma: 1.0  # 0.5-2.0, 1.0 = no change
 
 # Audio Settings
 audio:

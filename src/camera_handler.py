@@ -31,6 +31,13 @@ class CameraHandler:
         self.flip_horizontal = config.get('camera.flip_horizontal', False)
         self.flip_vertical = config.get('camera.flip_vertical', False)
 
+        # Color correction settings
+        self.color_correction_enabled = config.get('camera.color_correction.enabled', True)
+        self.brightness_adjust = config.get('camera.color_correction.brightness_adjust', 0)
+        self.contrast_adjust = config.get('camera.color_correction.contrast_adjust', 5)
+        self.saturation_adjust = config.get('camera.color_correction.saturation_adjust', 0)
+        self.gamma = config.get('camera.color_correction.gamma', 1.0)
+
         # Camera object
         self.camera = None
         self.is_running = False
@@ -81,11 +88,21 @@ class CameraHandler:
             if self.config.get('camera.auto_focus', True):
                 self.camera.set(cv2.CAP_PROP_AUTOFOCUS, 1)
 
-            # Set brightness and contrast
-            brightness = self.config.get('camera.brightness', 50)
-            contrast = self.config.get('camera.contrast', 50)
+            # Set brightness, contrast, and saturation
+            brightness = self.config.get('camera.brightness', 55)
+            contrast = self.config.get('camera.contrast', 60)
+            saturation = self.config.get('camera.saturation', 55)
             self.camera.set(cv2.CAP_PROP_BRIGHTNESS, brightness / 100.0)
             self.camera.set(cv2.CAP_PROP_CONTRAST, contrast / 100.0)
+            self.camera.set(cv2.CAP_PROP_SATURATION, saturation / 100.0)
+
+            # Enable auto white balance for natural colors
+            if self.config.get('camera.auto_white_balance', True):
+                self.camera.set(cv2.CAP_PROP_AUTO_WB, 1)
+
+            # Enable auto exposure
+            if self.config.get('camera.auto_exposure', True):
+                self.camera.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.75)  # Auto mode
 
             # Verify settings
             actual_width = int(self.camera.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -217,7 +234,47 @@ class CameraHandler:
         elif self.flip_vertical:
             frame = cv2.flip(frame, 0)
 
+        # Apply color correction
+        if self.color_correction_enabled:
+            frame = self._apply_color_correction(frame)
+
         return frame
+
+    def _apply_color_correction(self, frame: np.ndarray) -> np.ndarray:
+        """
+        Apply color correction to frame for natural colors
+
+        Args:
+            frame: Input frame
+
+        Returns:
+            Color-corrected frame
+        """
+        corrected = frame.copy()
+
+        # Apply brightness adjustment
+        if self.brightness_adjust != 0:
+            corrected = cv2.convertScaleAbs(corrected, alpha=1.0, beta=self.brightness_adjust * 2.55)
+
+        # Apply contrast adjustment
+        if self.contrast_adjust != 0:
+            alpha = 1.0 + (self.contrast_adjust / 100.0)
+            corrected = cv2.convertScaleAbs(corrected, alpha=alpha, beta=0)
+
+        # Apply saturation adjustment
+        if self.saturation_adjust != 0:
+            hsv = cv2.cvtColor(corrected, cv2.COLOR_BGR2HSV).astype(np.float32)
+            hsv[:, :, 1] = hsv[:, :, 1] * (1.0 + self.saturation_adjust / 100.0)
+            hsv[:, :, 1] = np.clip(hsv[:, :, 1], 0, 255)
+            corrected = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
+
+        # Apply gamma correction
+        if self.gamma != 1.0:
+            inv_gamma = 1.0 / self.gamma
+            table = np.array([((i / 255.0) ** inv_gamma) * 255 for i in range(256)]).astype(np.uint8)
+            corrected = cv2.LUT(corrected, table)
+
+        return corrected
 
     def get_frame(self, timeout: float = 0.5) -> Optional[np.ndarray]:
         """

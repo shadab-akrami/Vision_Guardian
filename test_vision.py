@@ -7,6 +7,10 @@ Use this to monitor what the system sees and hears
 
 import sys
 import os
+
+# Force X11 for display (before importing cv2)
+os.environ['QT_QPA_PLATFORM'] = 'xcb'
+
 import cv2
 import numpy as np
 import time
@@ -70,6 +74,11 @@ class VisionTester:
         }
         self.current_mode = 'o'
 
+        # Camera adjustments (start with config defaults)
+        self.brightness_adjust = self.config.get('camera.color_correction.brightness_adjust', 0)
+        self.contrast_adjust = self.config.get('camera.color_correction.contrast_adjust', 5)
+        self.saturation_adjust = self.config.get('camera.color_correction.saturation_adjust', 0)
+
         # Statistics
         self.fps = 0
         self.frame_count = 0
@@ -94,21 +103,21 @@ class VisionTester:
 
         # Object Detection (try enhanced first)
         print("  [2/5] Object Detection...", end=" ")
+        enhanced_success = False
+
         if ENHANCED_AVAILABLE:
             print("(Enhanced YOLOv8)...", end=" ")
-            self.config.data['enhanced_object_detection'] = {
-                'enabled': True,
-                'model_size': 'n',
-                'confidence_threshold': 0.5
-            }
-            self.object_detector = EnhancedObjectDetection(self.config)
-            if self.object_detector.initialize():
-                print("OK")
-            else:
-                print("FAILED, trying basic...")
-                ENHANCED_AVAILABLE = False
+            try:
+                self.object_detector = EnhancedObjectDetection(self.config)
+                if self.object_detector.initialize():
+                    print("OK")
+                    enhanced_success = True
+                else:
+                    print("FAILED, trying basic...")
+            except Exception as e:
+                print(f"ERROR: {e}, trying basic...")
 
-        if not ENHANCED_AVAILABLE or self.object_detector is None:
+        if not enhanced_success:
             self.object_detector = ObjectDetection(self.config)
             if self.object_detector.initialize():
                 print("OK (Basic COCO)")
@@ -165,9 +174,34 @@ class VisionTester:
 
         self.audio.announce = intercepted_announce
 
+    def adjust_frame_colors(self, frame):
+        """Adjust frame brightness, contrast, and saturation"""
+        adjusted = frame.copy()
+
+        # Apply brightness adjustment
+        if self.brightness_adjust != 0:
+            adjusted = cv2.convertScaleAbs(adjusted, alpha=1.0, beta=self.brightness_adjust * 2.55)
+
+        # Apply contrast adjustment
+        if self.contrast_adjust != 0:
+            alpha = 1.0 + (self.contrast_adjust / 100.0)
+            adjusted = cv2.convertScaleAbs(adjusted, alpha=alpha, beta=0)
+
+        # Apply saturation adjustment
+        if self.saturation_adjust != 0:
+            hsv = cv2.cvtColor(adjusted, cv2.COLOR_BGR2HSV).astype(np.float32)
+            hsv[:, :, 1] = hsv[:, :, 1] * (1.0 + self.saturation_adjust / 100.0)
+            hsv[:, :, 1] = np.clip(hsv[:, :, 1], 0, 255)
+            adjusted = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
+
+        return adjusted
+
     def process_frame(self, frame):
         """Process frame based on current mode"""
-        display_frame = frame.copy()
+        # Apply additional color adjustments on top of camera settings
+        # (Camera already applies base corrections from config)
+        # These are for real-time tuning in test mode
+        display_frame = self.adjust_frame_colors(frame)
         info_lines = []
 
         # Process based on mode
@@ -223,7 +257,7 @@ class VisionTester:
 
         # Draw title
         cv2.putText(panel, "VisionGuardian", (10, 30),
-                   cv2.FONT_HERSHEY_BOLD, 0.7, (0, 255, 0), 2)
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
         # Draw mode
         mode_name = self.modes[self.current_mode]
@@ -234,10 +268,18 @@ class VisionTester:
         cv2.putText(panel, f"FPS: {self.fps:.1f}", (10, 85),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
+        # Draw color adjustments
+        cv2.putText(panel, f"Brightness: {self.brightness_adjust:+d}", (10, 110),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
+        cv2.putText(panel, f"Contrast: {self.contrast_adjust:+d}", (10, 130),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
+        cv2.putText(panel, f"Saturation: {self.saturation_adjust:+d}", (10, 150),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
+
         # Draw detection info
-        y_pos = 120
+        y_pos = 180
         cv2.putText(panel, "Detection Info:", (10, y_pos),
-                   cv2.FONT_HERSHEY_BOLD, 0.5, (0, 255, 255), 1)
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
         y_pos += 25
 
         for line in info_lines[:5]:
@@ -251,7 +293,7 @@ class VisionTester:
         # Draw announcements
         y_pos = 300
         cv2.putText(panel, "Recent Announcements:", (10, y_pos),
-                   cv2.FONT_HERSHEY_BOLD, 0.5, (0, 255, 255), 1)
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
         y_pos += 25
 
         with self.announcement_lock:
@@ -276,7 +318,7 @@ class VisionTester:
         # Draw controls
         y_pos = self.display_height - 150
         cv2.putText(panel, "Controls:", (10, y_pos),
-                   cv2.FONT_HERSHEY_BOLD, 0.5, (0, 255, 255), 1)
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
         y_pos += 25
 
         controls = [
@@ -285,6 +327,12 @@ class VisionTester:
             "B - Obstacle Detection",
             "F - Face Recognition",
             "A - All Features",
+            "",
+            "1/2 - Brightness +/-",
+            "3/4 - Contrast +/-",
+            "5/6 - Saturation +/-",
+            "0 - Reset Colors",
+            "",
             "Q - Quit"
         ]
 
@@ -311,16 +359,31 @@ class VisionTester:
             return
 
         print("\nTest Monitor Controls:")
-        print("  O - Object Detection mode")
-        print("  T - Text Recognition mode")
-        print("  B - Obstacle Detection mode")
-        print("  F - Face Recognition mode")
-        print("  A - All Features mode")
-        print("  Q - Quit")
-        print("\nPress any key in the window to change modes...")
+        print("  Modes:")
+        print("    O - Object Detection")
+        print("    T - Text Recognition")
+        print("    B - Obstacle Detection")
+        print("    F - Face Recognition")
+        print("    A - All Features")
+        print("\n  Color Adjustments:")
+        print("    1/2 - Brightness +/-")
+        print("    3/4 - Contrast +/-")
+        print("    5/6 - Saturation +/-")
+        print("    0   - Reset colors")
+        print("\n  Q - Quit")
+        print("\n💡 If colors look wrong, adjust using keys 1-6")
+        print("Press any key in the window to control...")
 
-        cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
-        cv2.resizeWindow(self.window_name, self.display_width, self.display_height)
+        try:
+            cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
+            cv2.resizeWindow(self.window_name, self.display_width, self.display_height)
+        except cv2.error as e:
+            print(f"\n❌ Cannot create window: {e}")
+            print("\n💡 This script requires a display (monitor).")
+            print("   Run this on a machine with a display, or use:")
+            print("   python3 src/main.py  (for audio-only mode)")
+            self.cleanup()
+            return
 
         frame_times = deque(maxlen=30)
 
@@ -347,7 +410,12 @@ class VisionTester:
                 display = self.create_display(processed_frame, info_lines)
 
                 # Show
-                cv2.imshow(self.window_name, display)
+                try:
+                    cv2.imshow(self.window_name, display)
+                except cv2.error as e:
+                    print(f"\n❌ Display error: {e}")
+                    print("Window closed or display unavailable. Exiting...")
+                    break
 
                 # Handle keys
                 key = cv2.waitKey(1) & 0xFF
@@ -369,6 +437,31 @@ class VisionTester:
                 elif key == ord('a') or key == ord('A'):
                     self.current_mode = 'a'
                     print("Mode: All Features")
+
+                # Color adjustments
+                elif key == ord('1'):
+                    self.brightness_adjust = min(50, self.brightness_adjust + 5)
+                    print(f"Brightness: {self.brightness_adjust:+d}")
+                elif key == ord('2'):
+                    self.brightness_adjust = max(-50, self.brightness_adjust - 5)
+                    print(f"Brightness: {self.brightness_adjust:+d}")
+                elif key == ord('3'):
+                    self.contrast_adjust = min(50, self.contrast_adjust + 5)
+                    print(f"Contrast: {self.contrast_adjust:+d}")
+                elif key == ord('4'):
+                    self.contrast_adjust = max(-50, self.contrast_adjust - 5)
+                    print(f"Contrast: {self.contrast_adjust:+d}")
+                elif key == ord('5'):
+                    self.saturation_adjust = min(50, self.saturation_adjust + 5)
+                    print(f"Saturation: {self.saturation_adjust:+d}")
+                elif key == ord('6'):
+                    self.saturation_adjust = max(-50, self.saturation_adjust - 5)
+                    print(f"Saturation: {self.saturation_adjust:+d}")
+                elif key == ord('0'):
+                    self.brightness_adjust = 0
+                    self.contrast_adjust = 0
+                    self.saturation_adjust = 0
+                    print("Colors reset to default")
 
                 # Maintain frame rate
                 elapsed = time.time() - loop_start
