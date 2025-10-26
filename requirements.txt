@@ -1,0 +1,66 @@
+# Core Dependencies for Raspberry Pi 5 (64-bit ARM64)
+# Python 3.11+ required
+
+# Computer Vision (ARM64 optimized)
+opencv-python>=4.8.0
+opencv-contrib-python>=4.8.0
+
+# Deep Learning - TensorFlow Lite for ARM64
+# Note: Install manually if needed: pip3 install --index-url https://google-coral.github.io/py-repo/ tflite_runtime
+tflite-runtime>=2.14.0; platform_machine == "aarch64"
+
+# Enhanced Object Detection - YOLOv8 (FREE, 300+ objects)
+ultralytics>=8.0.0  # YOLOv8 for superior object detection
+
+# Image Processing
+Pillow>=10.0.0
+numpy>=1.24.0,<2.0.0
+imutils>=0.5.4
+
+# OCR
+pytesseract>=0.3.10
+# easyocr>=1.7.0  # Optional: Uncomment for better OCR (requires more storage)
+
+# Facial Recognition
+face-recognition>=1.3.0
+# dlib will be built from source on ARM64
+
+# Audio & Speech
+pyttsx3>=2.90
+gTTS>=2.4.0
+SpeechRecognition>=3.10.0
+# pyaudio - Install via: sudo apt-get install python3-pyaudio
+
+# Configuration
+PyYAML>=6.0.0
+python-dotenv>=1.0.0
+
+# Utilities
+scipy>=1.11.0
+scikit-learn>=1.3.0
+requests>=2.31.0
+psutil>=5.9.0
+
+# Logging
+coloredlogs>=15.0.0
+python-json-logger>=2.0.0
+
+# GPIO for Raspberry Pi (buttons/LEDs)
+# RPi.GPIO>=0.7.1; platform_machine == "aarch64"
+# gpiozero>=2.0.0; platform_machine == "aarch64"
+
+# System Monitoring
+distro>=1.8.0
+
+# Color Detection
+webcolors>=1.13
+
+# Distance Estimation
+filterpy>=1.4.5
+
+# AI Vision Services (OPTIONAL - PAID - Uncomment if you want cloud AI)
+# openai>=1.3.0  # OpenAI GPT-4 Vision API (costs money)
+# google-cloud-vision>=3.4.0  # Google Cloud Vision API (has free tier)
+
+# Note: threading is built into Python, no external package needed
+# Note: TensorFlow full is optional, only needed for model conversion
