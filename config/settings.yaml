@@ -13,20 +13,20 @@ system:
 
 # Camera Settings
 camera:
-  device_id: 0  # Default webcam (try 1, 2 if grey screen persists)
-  resolution_width: 640  # Lower resolution for better performance
+  device_id: 0  # USB webcam device (run: python3 fix_logitech_camera.py to auto-detect)
+  resolution_width: 640  # 640x480 for Logitech C270/C920
   resolution_height: 480
-  fps: 15  # Target FPS for Raspberry Pi 5
+  fps: 30  # Logitech webcams support 30fps at 720p
   rotation: 0  # 0, 90, 180, 270
   flip_horizontal: false
   flip_vertical: false
   auto_focus: true
-  brightness: 50  # 0-100 (50 = camera default, same as Windows)
-  contrast: 50    # 0-100 (50 = camera default, same as Windows)
-  saturation: 50  # 0-100 (50 = camera default, same as Windows)
+  brightness: 50  # 0-100 (50 = camera default)
+  contrast: 50    # 0-100 (50 = camera default)
+  saturation: 50  # 0-100 (50 = camera default)
   auto_white_balance: true  # Auto white balance for natural colors
   auto_exposure: true  # Auto exposure for varying lighting
-  raw_mode: true  # TRUE = bypass ALL processing (recommended for debugging)
+  raw_mode: false  # FALSE = enable processing (USB cameras usually work better with this)
   # Color correction (DISABLED - camera defaults are perfect)
   color_correction:
     enabled: false  # Disabled - use camera's native colors

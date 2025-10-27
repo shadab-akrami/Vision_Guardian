@@ -2,11 +2,15 @@
 
 Get up and running in 15 minutes!
 
+> 📹 **Using a USB Webcam (Logitech, etc.)?**
+> After installation, run: `python3 fix_logitech_camera.py`
+> See [LOGITECH_WEBCAM_SETUP.md](LOGITECH_WEBCAM_SETUP.md) for details.
+
 ## Prerequisites
 
 - Raspberry Pi 5 with 64-bit Raspberry Pi OS
 - 32GB microSD card
-- USB Webcam
+- **USB Webcam** (Logitech C270/C920 or similar) **OR** Pi Camera Module
 - Earphones/Headphones
 - Internet connection
 
@@ -38,15 +42,34 @@ Get up and running in 15 minutes!
 
 ## Basic Configuration (2 minutes)
 
-1. **Test the camera:**
+1. **Fix USB Webcam (Logitech, etc.):**
+
+   **If you're using a USB webcam (like Logitech C270/C920)**, run this first:
    ```bash
    cd ~/blind-assistant
    source venv/bin/activate
-   python3 src/camera_handler.py
+   python3 fix_logitech_camera.py
    ```
-   Press 'q' to quit if the camera works.
 
-2. **Test audio:**
+   This auto-detects your camera and fixes the "uniform gray pixels" issue.
+
+   ✅ **Success!** You'll see: `✓ SUCCESS! Camera is working!`
+
+   📖 **For detailed help:** See `LOGITECH_WEBCAM_SETUP.md`
+
+2. **Test all camera backends (optional):**
+   ```bash
+   python3 test_camera_backends.py
+   ```
+   This shows which camera method works best on your system.
+
+3. **Test the camera with visual feed:**
+   ```bash
+   python3 test_vision.py
+   ```
+   You should see a live camera feed with colors. Press 'q' to quit.
+
+4. **Test audio:**
    ```bash
    python3 src/audio_output.py
    ```
@@ -132,10 +155,34 @@ object_detection:
 
 ## Troubleshooting
 
-### No camera?
+### USB Webcam showing gray screen?
 ```bash
-vcgencmd get_camera
-sudo raspi-config  # Enable camera
+# Auto-fix (recommended)
+python3 fix_logitech_camera.py
+
+# Manual check
+ls -l /dev/video*  # Should show /dev/video0, etc.
+lsusb | grep -i logitech  # Check if USB camera detected
+
+# Fix permissions
+sudo usermod -a -G video $USER
+sudo reboot
+
+# See detailed guide
+cat LOGITECH_WEBCAM_SETUP.md
+```
+
+### Pi Camera Module not working?
+```bash
+# Enable Pi Camera
+sudo raspi-config  # Interface Options → Camera → Enable
+vcgencmd get_camera  # Should show "detected=1"
+
+# Install picamera2
+pip install picamera2
+
+# Test
+libcamera-hello
 ```
 
 ### No audio?

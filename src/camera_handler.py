@@ -1,7 +1,7 @@
 """
 Camera Handler for VisionGuardian
 Manages webcam capture and frame processing
-Optimized for Raspberry Pi 5
+Optimized for Raspberry Pi 5 with multiple backend support
 """
 
 import cv2
@@ -13,6 +13,13 @@ from queue import Queue, Empty
 from typing import Optional, Tuple, Callable
 
 from utils import Config, PerformanceMonitor
+
+# Try to import picamera2 for Raspberry Pi camera modules
+try:
+    from picamera2 import Picamera2
+    PICAMERA2_AVAILABLE = True
+except ImportError:
+    PICAMERA2_AVAILABLE = False
 
 
 class CameraHandler:
@@ -41,8 +48,10 @@ class CameraHandler:
         # Raw mode - bypass ALL processing (for debugging)
         self.raw_mode = config.get('camera.raw_mode', False)
 
-        # Camera object
+        # Backend selection
+        self.backend = None  # Will be set during initialization
         self.camera = None
+        self.picam2 = None  # For picamera2 backend
         self.is_running = False
 
         # Threading
@@ -59,86 +68,194 @@ class CameraHandler:
         self.fps = 0
         self.last_fps_time = time.time()
 
+    def _init_picamera2(self) -> bool:
+        """Try to initialize using picamera2 (Raspberry Pi camera modules)"""
+        if not PICAMERA2_AVAILABLE:
+            return False
+
+        try:
+            self.logger.info("Attempting picamera2 backend (Raspberry Pi Camera Module)...")
+            self.picam2 = Picamera2()
+
+            # Configure camera
+            config = self.picam2.create_preview_configuration(
+                main={"size": (self.resolution_width, self.resolution_height), "format": "RGB888"},
+                controls={"FrameRate": self.target_fps}
+            )
+            self.picam2.configure(config)
+            self.picam2.start()
+
+            # Warm up
+            time.sleep(0.5)
+            test_frame = self.picam2.capture_array()
+
+            if test_frame is not None and test_frame.size > 0:
+                # Check if we're getting valid data
+                if test_frame.max() == 0:
+                    self.logger.warning("picamera2: producing black frames")
+                    self.picam2.stop()
+                    return False
+                elif test_frame.min() == test_frame.max():
+                    self.logger.warning(f"picamera2: producing uniform frames (all {test_frame.min()})")
+                    self.picam2.stop()
+                    return False
+                else:
+                    self.backend = "picamera2"
+                    self.logger.info(f"✅ picamera2 initialized successfully (pixel range: {test_frame.min()}-{test_frame.max()})")
+                    return True
+
+            return False
+
+        except Exception as e:
+            self.logger.debug(f"picamera2 failed: {e}")
+            if self.picam2:
+                try:
+                    self.picam2.stop()
+                except:
+                    pass
+            return False
+
+    def _init_opencv(self, device_id: int, backend) -> bool:
+        """Try to initialize using OpenCV with specified backend"""
+        try:
+            backend_name = {cv2.CAP_V4L2: "V4L2", cv2.CAP_ANY: "ANY"}.get(backend, str(backend))
+            self.logger.info(f"Attempting OpenCV backend {backend_name} with device {device_id}...")
+
+            camera = cv2.VideoCapture(device_id, backend)
+            if not camera.isOpened():
+                return False
+
+            # Set camera properties
+            camera.set(cv2.CAP_PROP_FRAME_WIDTH, self.resolution_width)
+            camera.set(cv2.CAP_PROP_FRAME_HEIGHT, self.resolution_height)
+            camera.set(cv2.CAP_PROP_FPS, self.target_fps)
+
+            # Try to set camera parameters (may not work on all cameras)
+            try:
+                if self.config.get('camera.auto_focus', True):
+                    camera.set(cv2.CAP_PROP_AUTOFOCUS, 1)
+
+                brightness = self.config.get('camera.brightness', 50)
+                contrast = self.config.get('camera.contrast', 50)
+                saturation = self.config.get('camera.saturation', 50)
+                camera.set(cv2.CAP_PROP_BRIGHTNESS, brightness / 100.0)
+                camera.set(cv2.CAP_PROP_CONTRAST, contrast / 100.0)
+                camera.set(cv2.CAP_PROP_SATURATION, saturation / 100.0)
+
+                if self.config.get('camera.auto_white_balance', True):
+                    camera.set(cv2.CAP_PROP_AUTO_WB, 1)
+
+                if self.config.get('camera.auto_exposure', True):
+                    camera.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.75)
+            except:
+                self.logger.debug("Some camera properties not supported, continuing...")
+
+            # Warm up and test
+            for i in range(10):
+                ret, frame = camera.read()
+                if not ret or frame is None:
+                    continue
+
+                if i == 9:  # Last frame
+                    if frame.max() == 0:
+                        self.logger.warning(f"OpenCV {backend_name}: producing black frames")
+                        camera.release()
+                        return False
+                    elif frame.min() == frame.max():
+                        self.logger.warning(f"OpenCV {backend_name}: producing uniform frames (all {frame.min()})")
+                        camera.release()
+                        return False
+                    else:
+                        self.camera = camera
+                        self.backend = f"opencv_{backend_name.lower()}"
+                        actual_width = int(camera.get(cv2.CAP_PROP_FRAME_WIDTH))
+                        actual_height = int(camera.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                        actual_fps = int(camera.get(cv2.CAP_PROP_FPS))
+                        self.logger.info(f"✅ OpenCV {backend_name} initialized: {actual_width}x{actual_height} @ {actual_fps}fps (pixel range: {frame.min()}-{frame.max()})")
+                        return True
+
+            camera.release()
+            return False
+
+        except Exception as e:
+            self.logger.debug(f"OpenCV backend {backend_name} failed: {e}")
+            return False
+
     def initialize(self) -> bool:
         """
-        Initialize camera
+        Initialize camera with automatic backend detection
 
         Returns:
             True if successful, False otherwise
         """
         try:
-            self.logger.info(f"Initializing camera {self.device_id}...")
+            self.logger.info("=" * 60)
+            self.logger.info("CAMERA INITIALIZATION - Multi-Backend Support")
+            self.logger.info("=" * 60)
 
-            # Try different backends for Raspberry Pi
-            backends = [cv2.CAP_V4L2, cv2.CAP_ANY]
-
-            for backend in backends:
-                self.camera = cv2.VideoCapture(self.device_id, backend)
-                if self.camera.isOpened():
-                    self.logger.info(f"Camera opened with backend: {backend}")
-                    break
-
-            if not self.camera or not self.camera.isOpened():
-                self.logger.error("Failed to open camera")
-                return False
-
-            # Set camera properties
-            self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, self.resolution_width)
-            self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, self.resolution_height)
-            self.camera.set(cv2.CAP_PROP_FPS, self.target_fps)
-
-            # Enable auto settings
-            if self.config.get('camera.auto_focus', True):
-                self.camera.set(cv2.CAP_PROP_AUTOFOCUS, 1)
-
-            # Set brightness, contrast, and saturation
-            brightness = self.config.get('camera.brightness', 55)
-            contrast = self.config.get('camera.contrast', 60)
-            saturation = self.config.get('camera.saturation', 55)
-            self.camera.set(cv2.CAP_PROP_BRIGHTNESS, brightness / 100.0)
-            self.camera.set(cv2.CAP_PROP_CONTRAST, contrast / 100.0)
-            self.camera.set(cv2.CAP_PROP_SATURATION, saturation / 100.0)
-
-            # Enable auto white balance for natural colors
-            if self.config.get('camera.auto_white_balance', True):
-                self.camera.set(cv2.CAP_PROP_AUTO_WB, 1)
-
-            # Enable auto exposure
-            if self.config.get('camera.auto_exposure', True):
-                self.camera.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.75)  # Auto mode
-
-            # Verify settings
-            actual_width = int(self.camera.get(cv2.CAP_PROP_FRAME_WIDTH))
-            actual_height = int(self.camera.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            actual_fps = int(self.camera.get(cv2.CAP_PROP_FPS))
-
-            self.logger.info(f"Camera initialized: {actual_width}x{actual_height} @ {actual_fps} FPS")
-
-            # Log processing mode
-            if self.raw_mode:
-                self.logger.info("RAW MODE ENABLED - All processing bypassed")
+            # Strategy 1: Try picamera2 first (best for Raspberry Pi camera modules)
+            if PICAMERA2_AVAILABLE:
+                self.logger.info("[1/3] Trying picamera2 (Raspberry Pi Camera Module)...")
+                if self._init_picamera2():
+                    self.logger.info(f"✅ SUCCESS! Using backend: {self.backend}")
+                    self._log_camera_status()
+                    return True
+                self.logger.info("   picamera2 not available or not working")
             else:
-                self.logger.info(f"Processing enabled: rotation={self.rotation}, "
-                               f"flip_h={self.flip_horizontal}, flip_v={self.flip_vertical}, "
-                               f"color_correction={self.color_correction_enabled}")
+                self.logger.info("[1/3] picamera2 library not installed (install with: pip install picamera2)")
 
-            # Warm up camera (important - some cameras need this!)
-            self.logger.info("Warming up camera (capturing 30 frames)...")
-            for i in range(30):
-                ret, frame = self.camera.read()
-                if i == 29 and frame is not None:
-                    # Check if we're getting valid data
-                    if frame.max() == 0:
-                        self.logger.warning("Camera warming up but still producing black frames")
-                    else:
-                        self.logger.info(f"Camera warm-up complete (pixel range: {frame.min()}-{frame.max()})")
+            # Strategy 2: Try OpenCV with V4L2 backend and multiple device IDs
+            self.logger.info("[2/3] Trying OpenCV with V4L2 backend...")
+            device_ids_to_try = [self.device_id, 0, 1, 2]  # Try configured ID first, then common ones
+            for dev_id in device_ids_to_try:
+                if self._init_opencv(dev_id, cv2.CAP_V4L2):
+                    self.device_id = dev_id  # Update to working device ID
+                    self.logger.info(f"✅ SUCCESS! Using backend: {self.backend} with device {dev_id}")
+                    self._log_camera_status()
+                    return True
+            self.logger.info("   V4L2 backend not working")
 
-            self.logger.info("Camera ready")
-            return True
+            # Strategy 3: Try OpenCV with generic backend
+            self.logger.info("[3/3] Trying OpenCV with generic backend...")
+            for dev_id in device_ids_to_try:
+                if self._init_opencv(dev_id, cv2.CAP_ANY):
+                    self.device_id = dev_id
+                    self.logger.info(f"✅ SUCCESS! Using backend: {self.backend} with device {dev_id}")
+                    self._log_camera_status()
+                    return True
+
+            # All strategies failed
+            self.logger.error("=" * 60)
+            self.logger.error("❌ ALL CAMERA BACKENDS FAILED")
+            self.logger.error("=" * 60)
+            self.logger.error("Troubleshooting steps:")
+            self.logger.error("1. Check camera connection (USB or ribbon cable)")
+            self.logger.error("2. For Raspberry Pi Camera Module:")
+            self.logger.error("   - Enable camera: sudo raspi-config → Interface → Camera")
+            self.logger.error("   - Install picamera2: pip install picamera2")
+            self.logger.error("3. For USB cameras:")
+            self.logger.error("   - List devices: ls -l /dev/video*")
+            self.logger.error("   - Check permissions: sudo usermod -a -G video $USER")
+            self.logger.error("4. Try rebooting the system")
+            self.logger.error("=" * 60)
+            return False
 
         except Exception as e:
-            self.logger.error(f"Error initializing camera: {e}")
+            self.logger.error(f"Critical error during camera initialization: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
             return False
+
+    def _log_camera_status(self):
+        """Log current camera configuration"""
+        self.logger.info("Camera Configuration:")
+        self.logger.info(f"  Backend: {self.backend}")
+        self.logger.info(f"  Device ID: {self.device_id}")
+        self.logger.info(f"  Resolution: {self.resolution_width}x{self.resolution_height}")
+        self.logger.info(f"  Target FPS: {self.target_fps}")
+        self.logger.info(f"  Raw Mode: {self.raw_mode}")
+        self.logger.info(f"  Color Correction: {self.color_correction_enabled}")
+        self.logger.info("=" * 60)
 
     def start_capture(self) -> bool:
         """
@@ -188,8 +305,21 @@ class CameraHandler:
 
                 self.performance.start('frame_capture')
 
-                # Capture frame
-                ret, frame = self.camera.read()
+                # Capture frame based on backend
+                frame = None
+                if self.backend == "picamera2" and self.picam2:
+                    # picamera2 backend
+                    frame = self.picam2.capture_array()
+                    # Convert RGB to BGR for OpenCV compatibility
+                    if frame is not None and len(frame.shape) == 3:
+                        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                    ret = frame is not None
+                elif self.camera:
+                    # OpenCV backend
+                    ret, frame = self.camera.read()
+                else:
+                    self.logger.error("No camera backend available")
+                    break
 
                 if not ret or frame is None:
                     self.logger.warning("Failed to capture frame")
@@ -207,6 +337,10 @@ class CameraHandler:
                         self.logger.error("Camera producing BLACK frames (all zeros)")
                     elif frame.min() == frame.max():
                         self.logger.error(f"Camera producing UNIFORM frames (all {frame.min()})")
+                        # Get R, G, B values
+                        if len(frame.shape) == 3 and frame.shape[2] == 3:
+                            b, g, r = frame[0, 0]
+                            self.logger.error(f"  Uniform pixel value: R:{r} G:{g} B:{b}")
                     elif frame.max() < 10:
                         self.logger.warning(f"Camera producing very DARK frames (max={frame.max()})")
 
@@ -401,10 +535,19 @@ class CameraHandler:
         """Release camera resources"""
         self.stop_capture()
 
+        if self.picam2:
+            try:
+                self.picam2.stop()
+                self.picam2.close()
+            except:
+                pass
+            self.picam2 = None
+            self.logger.info("picamera2 released")
+
         if self.camera:
             self.camera.release()
             self.camera = None
-            self.logger.info("Camera released")
+            self.logger.info("OpenCV camera released")
 
     def __enter__(self):
         """Context manager entry"""
