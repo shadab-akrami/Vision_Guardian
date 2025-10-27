@@ -111,9 +111,16 @@ class CameraHandler:
 
             self.logger.info(f"Camera initialized: {actual_width}x{actual_height} @ {actual_fps} FPS")
 
-            # Warm up camera
-            for _ in range(10):
-                self.camera.read()
+            # Warm up camera (important - some cameras need this!)
+            self.logger.info("Warming up camera (capturing 30 frames)...")
+            for i in range(30):
+                ret, frame = self.camera.read()
+                if i == 29 and frame is not None:
+                    # Check if we're getting valid data
+                    if frame.max() == 0:
+                        self.logger.warning("Camera warming up but still producing black frames")
+                    else:
+                        self.logger.info(f"Camera warm-up complete (pixel range: {frame.min()}-{frame.max()})")
 
             self.logger.info("Camera ready")
             return True
@@ -234,9 +241,12 @@ class CameraHandler:
         elif self.flip_vertical:
             frame = cv2.flip(frame, 0)
 
-        # Apply color correction
+        # Apply color correction (only if explicitly enabled)
         if self.color_correction_enabled:
-            frame = self._apply_color_correction(frame)
+            try:
+                frame = self._apply_color_correction(frame)
+            except Exception as e:
+                self.logger.warning(f"Color correction failed: {e}, using original frame")
 
         return frame
 

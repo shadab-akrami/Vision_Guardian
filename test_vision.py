@@ -97,6 +97,26 @@ class VisionTester:
         if self.camera.initialize():
             self.camera.start_capture()
             print("OK")
+
+            # Wait for camera to produce frames
+            time.sleep(1)
+
+            # Check if we're actually getting frames
+            test_frame = self.camera.get_current_frame()
+            if test_frame is None:
+                print("    ⚠️  WARNING: Camera opened but no frames yet, waiting...")
+                time.sleep(2)
+                test_frame = self.camera.get_current_frame()
+
+            if test_frame is not None:
+                if test_frame.max() == 0:
+                    print("    ⚠️  WARNING: Camera producing black frames (all zeros)")
+                    print("    This might be:")
+                    print("      - Wrong camera device (try device_id: 1 in config)")
+                    print("      - Camera needs more warm-up time")
+                    print("      - Camera permission issue")
+                else:
+                    print(f"    ✅ Camera producing valid frames (pixel range: {test_frame.min()}-{test_frame.max()})")
         else:
             print("FAILED")
             return False
