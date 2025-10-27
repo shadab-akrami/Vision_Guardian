@@ -74,10 +74,10 @@ class VisionTester:
         }
         self.current_mode = 'o'
 
-        # Camera adjustments (start with config defaults)
-        self.brightness_adjust = self.config.get('camera.color_correction.brightness_adjust', 0)
-        self.contrast_adjust = self.config.get('camera.color_correction.contrast_adjust', 5)
-        self.saturation_adjust = self.config.get('camera.color_correction.saturation_adjust', 0)
+        # Camera adjustments (start at zero - camera defaults are good)
+        self.brightness_adjust = 0
+        self.contrast_adjust = 0
+        self.saturation_adjust = 0
 
         # Statistics
         self.fps = 0

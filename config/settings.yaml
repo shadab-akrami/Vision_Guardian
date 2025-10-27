@@ -21,16 +21,16 @@ camera:
   flip_horizontal: false
   flip_vertical: false
   auto_focus: true
-  brightness: 55  # 0-100 (slightly brighter for better detection)
-  contrast: 60    # 0-100 (higher contrast for clarity)
-  saturation: 55  # 0-100 (balanced color)
+  brightness: 50  # 0-100 (50 = camera default, same as Windows)
+  contrast: 50    # 0-100 (50 = camera default, same as Windows)
+  saturation: 50  # 0-100 (50 = camera default, same as Windows)
   auto_white_balance: true  # Auto white balance for natural colors
   auto_exposure: true  # Auto exposure for varying lighting
-  # Color correction (software adjustments, -50 to +50)
+  # Color correction (DISABLED - camera defaults are perfect)
   color_correction:
-    enabled: true
+    enabled: false  # Disabled - use camera's native colors
     brightness_adjust: 0
-    contrast_adjust: 5    # Slight contrast boost
+    contrast_adjust: 0
     saturation_adjust: 0
     gamma: 1.0  # 0.5-2.0, 1.0 = no change
 
