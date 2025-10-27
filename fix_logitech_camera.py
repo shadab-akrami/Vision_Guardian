@@ -82,35 +82,54 @@ def test_device_with_formats(device_id):
                 camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
                 camera.set(cv2.CAP_PROP_FPS, 30)
 
-                # Disable auto exposure issues
-                camera.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25)  # Manual mode
-                camera.set(cv2.CAP_PROP_EXPOSURE, -5)  # Fixed exposure
+                # Try to set camera parameters
+                try:
+                    camera.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.75)  # Auto mode
+                    camera.set(cv2.CAP_PROP_AUTO_WB, 1)  # Auto white balance
+                except:
+                    pass
 
-                # Warm up
-                for _ in range(10):
+                # Extended warm-up (USB cameras need time to stabilize!)
+                # Discard first 30 frames
+                for i in range(30):
                     ret, frame = camera.read()
                     if not ret:
                         break
-                    time.sleep(0.05)
+                    time.sleep(0.1)  # Give camera time
 
-                # Test frame
-                ret, frame = camera.read()
+                # Now test with multiple frames
+                valid_frames = 0
+                last_frame = None
+
+                for i in range(5):
+                    ret, frame = camera.read()
+                    time.sleep(0.1)
+
+                    if ret and frame is not None and frame.size > 0:
+                        last_frame = frame
+                        # Check if valid (not uniform)
+                        if frame.max() > 0 and frame.min() != frame.max():
+                            valid_frames += 1
+
                 camera.release()
 
-                if ret and frame is not None and frame.size > 0:
-                    # Check frame quality
-                    min_val = frame.min()
-                    max_val = frame.max()
-
+                # Need at least 3/5 valid frames
+                if valid_frames >= 3 and last_frame is not None:
+                    min_val = last_frame.min()
+                    max_val = last_frame.max()
+                    result = f"{GREEN}✓ WORKING! ({valid_frames}/5 valid, pixels: {min_val}-{max_val}){RESET}"
+                    print(f"    {backend_name}/{fmt_name}: {result}")
+                    return True, backend, backend_name, fmt_code, fmt_name
+                elif last_frame is not None:
+                    min_val = last_frame.min()
+                    max_val = last_frame.max()
                     if max_val == 0:
                         result = f"{RED}BLACK{RESET}"
                     elif min_val == max_val:
-                        b, g, r = frame[0, 0]
-                        result = f"{RED}UNIFORM (R:{r} G:{g} B:{b}){RESET}"
+                        b, g, r = last_frame[0, 0]
+                        result = f"{RED}UNIFORM (R:{r} G:{g} B:{b}) - only {valid_frames}/5 valid{RESET}"
                     else:
-                        result = f"{GREEN}✓ WORKING! (pixels: {min_val}-{max_val}){RESET}"
-                        return True, backend, backend_name, fmt_code, fmt_name
-
+                        result = f"{YELLOW}UNSTABLE (only {valid_frames}/5 valid){RESET}"
                     print(f"    {backend_name}/{fmt_name}: {result}")
 
             except Exception as e:

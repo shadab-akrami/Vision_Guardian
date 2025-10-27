@@ -130,6 +130,12 @@ class CameraHandler:
             camera.set(cv2.CAP_PROP_FRAME_HEIGHT, self.resolution_height)
             camera.set(cv2.CAP_PROP_FPS, self.target_fps)
 
+            # Set FOURCC to MJPEG for USB cameras (works better than YUYV)
+            try:
+                camera.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
+            except:
+                pass
+
             # Try to set camera parameters (may not work on all cameras)
             try:
                 if self.config.get('camera.auto_focus', True):
@@ -150,30 +156,56 @@ class CameraHandler:
             except:
                 self.logger.debug("Some camera properties not supported, continuing...")
 
-            # Warm up and test
-            for i in range(10):
+            # Extended warm-up for USB cameras (they need more time!)
+            self.logger.info(f"Warming up camera (capturing 30 frames with delays)...")
+
+            # Discard first frames (often garbage)
+            for i in range(30):
                 ret, frame = camera.read()
+                if not ret or frame is None:
+                    time.sleep(0.05)
+                    continue
+
+                # Add small delay to let camera stabilize
+                time.sleep(0.1)
+
+                # Check progress every 10 frames
+                if i > 0 and i % 10 == 0 and frame is not None:
+                    pixel_range = f"{frame.min()}-{frame.max()}"
+                    if frame.min() == frame.max():
+                        self.logger.debug(f"  Frame {i}: Still uniform (value={frame.min()})")
+                    else:
+                        self.logger.debug(f"  Frame {i}: Getting better (pixels: {pixel_range})")
+
+            # Final validation - capture a few more frames and check
+            valid_frames = 0
+            for i in range(5):
+                ret, frame = camera.read()
+                time.sleep(0.1)
+
                 if not ret or frame is None:
                     continue
 
-                if i == 9:  # Last frame
-                    if frame.max() == 0:
-                        self.logger.warning(f"OpenCV {backend_name}: producing black frames")
-                        camera.release()
-                        return False
-                    elif frame.min() == frame.max():
-                        self.logger.warning(f"OpenCV {backend_name}: producing uniform frames (all {frame.min()})")
-                        camera.release()
-                        return False
-                    else:
-                        self.camera = camera
-                        self.backend = f"opencv_{backend_name.lower()}"
-                        actual_width = int(camera.get(cv2.CAP_PROP_FRAME_WIDTH))
-                        actual_height = int(camera.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                        actual_fps = int(camera.get(cv2.CAP_PROP_FPS))
-                        self.logger.info(f"✅ OpenCV {backend_name} initialized: {actual_width}x{actual_height} @ {actual_fps}fps (pixel range: {frame.min()}-{frame.max()})")
-                        return True
+                # Check if frame is valid
+                if frame.max() > 0 and frame.min() != frame.max():
+                    valid_frames += 1
 
+            # Need at least 3 out of 5 valid frames
+            if valid_frames >= 3:
+                self.camera = camera
+                self.backend = f"opencv_{backend_name.lower()}"
+                actual_width = int(camera.get(cv2.CAP_PROP_FRAME_WIDTH))
+                actual_height = int(camera.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                actual_fps = int(camera.get(cv2.CAP_PROP_FPS))
+
+                # Get final frame stats
+                ret, frame = camera.read()
+                if ret and frame is not None:
+                    self.logger.info(f"✅ OpenCV {backend_name} initialized: {actual_width}x{actual_height} @ {actual_fps}fps (pixel range: {frame.min()}-{frame.max()})")
+                    return True
+
+            # Failed validation
+            self.logger.warning(f"OpenCV {backend_name}: Camera not producing valid frames ({valid_frames}/5 valid)")
             camera.release()
             return False
 
