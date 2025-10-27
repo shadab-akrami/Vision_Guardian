@@ -13,7 +13,7 @@ system:
 
 # Camera Settings
 camera:
-  device_id: 0  # Default webcam
+  device_id: 0  # Default webcam (try 1, 2 if grey screen persists)
   resolution_width: 640  # Lower resolution for better performance
   resolution_height: 480
   fps: 15  # Target FPS for Raspberry Pi 5
@@ -26,6 +26,7 @@ camera:
   saturation: 50  # 0-100 (50 = camera default, same as Windows)
   auto_white_balance: true  # Auto white balance for natural colors
   auto_exposure: true  # Auto exposure for varying lighting
+  raw_mode: true  # TRUE = bypass ALL processing (recommended for debugging)
   # Color correction (DISABLED - camera defaults are perfect)
   color_correction:
     enabled: false  # Disabled - use camera's native colors

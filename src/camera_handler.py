@@ -38,6 +38,9 @@ class CameraHandler:
         self.saturation_adjust = config.get('camera.color_correction.saturation_adjust', 0)
         self.gamma = config.get('camera.color_correction.gamma', 1.0)
 
+        # Raw mode - bypass ALL processing (for debugging)
+        self.raw_mode = config.get('camera.raw_mode', False)
+
         # Camera object
         self.camera = None
         self.is_running = False
@@ -110,6 +113,14 @@ class CameraHandler:
             actual_fps = int(self.camera.get(cv2.CAP_PROP_FPS))
 
             self.logger.info(f"Camera initialized: {actual_width}x{actual_height} @ {actual_fps} FPS")
+
+            # Log processing mode
+            if self.raw_mode:
+                self.logger.info("RAW MODE ENABLED - All processing bypassed")
+            else:
+                self.logger.info(f"Processing enabled: rotation={self.rotation}, "
+                               f"flip_h={self.flip_horizontal}, flip_v={self.flip_vertical}, "
+                               f"color_correction={self.color_correction_enabled}")
 
             # Warm up camera (important - some cameras need this!)
             self.logger.info("Warming up camera (capturing 30 frames)...")
@@ -185,6 +196,20 @@ class CameraHandler:
                     time.sleep(0.1)
                     continue
 
+                # Validate frame data
+                if frame.size == 0:
+                    self.logger.warning("Captured empty frame")
+                    continue
+
+                # Check for grey/black frames
+                if self.frame_count % 100 == 0:  # Check every 100 frames
+                    if frame.max() == 0:
+                        self.logger.error("Camera producing BLACK frames (all zeros)")
+                    elif frame.min() == frame.max():
+                        self.logger.error(f"Camera producing UNIFORM frames (all {frame.min()})")
+                    elif frame.max() < 10:
+                        self.logger.warning(f"Camera producing very DARK frames (max={frame.max()})")
+
                 # Process frame
                 frame = self._process_frame(frame)
 
@@ -225,6 +250,10 @@ class CameraHandler:
         Returns:
             Processed frame
         """
+        # RAW MODE - Return frame as-is with NO processing
+        if self.raw_mode:
+            return frame
+
         # Apply rotation
         if self.rotation == 90:
             frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
